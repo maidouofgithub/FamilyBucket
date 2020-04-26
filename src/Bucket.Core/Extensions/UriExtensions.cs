@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Bucket.Core
+namespace Bucket.Extensions
 {
     public static class UriExtensions
     {
@@ -31,7 +31,7 @@ namespace Bucket.Core
 
             return s;
         }
-  
+
 
         public static bool StartsWithSegments(this Uri uri, string path)
         {
@@ -70,7 +70,7 @@ namespace Bucket.Core
             using (var leftEnumerator = left.GetEnumerator())
             using (var rightEnumerator = right.GetEnumerator())
             {
-                for (;;)
+                for (; ; )
                 {
                     if (!rightEnumerator.MoveNext())
                     {

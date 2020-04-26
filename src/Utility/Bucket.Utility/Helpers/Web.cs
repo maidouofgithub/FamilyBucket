@@ -1,14 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Http.Internal;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
-using Microsoft.AspNetCore.Http.Internal;
 
 namespace Bucket.Utility.Helpers
 {
@@ -37,11 +37,6 @@ namespace Bucket.Utility.Helpers
         /// 当前Http响应
         /// </summary>
         public static HttpResponse Response => HttpContext?.Response;
-
-        /// <summary>
-        /// 宿主环境
-        /// </summary>
-        public static IHostingEnvironment Environment { get; set; }
 
         #endregion
 
@@ -83,10 +78,10 @@ namespace Bucket.Utility.Helpers
 
         #endregion
 
-        #region Ip(客户端Ip地址)
+        #region Ip(客户端IPv4地址)
 
         /// <summary>
-        /// 客户端Ip地址
+        /// 客户端Ip地址(IPv4)
         /// </summary>
         public static string Ip
         {
@@ -94,8 +89,13 @@ namespace Bucket.Utility.Helpers
             {
                 var list = new[] { "127.0.0.1", "::1" };
                 var result = HttpContext?.Request?.Headers["X-Forwarded-For"].FirstOrDefault().SafeString();
-                if (string.IsNullOrEmpty(result))
-                    result = HttpContext?.Connection?.RemoteIpAddress.SafeString();
+                if (string.IsNullOrEmpty(result) && HttpContext?.Connection?.RemoteIpAddress != null)
+                {
+                    if (HttpContext.Connection.RemoteIpAddress.IsIPv4MappedToIPv6)
+                        result = HttpContext?.Connection?.RemoteIpAddress.MapToIPv4().SafeString();
+                    else
+                        result = HttpContext?.Connection?.RemoteIpAddress.SafeString();
+                }
                 if (string.IsNullOrWhiteSpace(result) || list.Contains(result))
                     result = GetLanIp();
                 return result;
@@ -107,12 +107,11 @@ namespace Bucket.Utility.Helpers
         /// </summary>
         private static string GetLanIp()
         {
-            foreach (var hostAddress in Dns.GetHostAddresses(Dns.GetHostName()))
-            {
-                if (hostAddress.AddressFamily == AddressFamily.InterNetwork)
-                    return hostAddress.ToString();
-            }
-            return string.Empty;
+            return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Select(p => p.GetIPProperties())
+                .SelectMany(p => p.UnicastAddresses)
+                .Where(p => p.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(p.Address))
+                .FirstOrDefault()?.Address.ToString();
         }
 
         #endregion
@@ -156,24 +155,6 @@ namespace Bucket.Utility.Helpers
         public static string Browser => HttpContext?.Request?.Headers["User-Agent"];
 
         #endregion
-
-        #region RootPath(根路径)
-
-        /// <summary>
-        /// 根路径
-        /// </summary>
-        public static string RootPath => Environment?.ContentRootPath;
-
-        #endregion 
-
-        #region WebRootPath(Web根路径)
-
-        /// <summary>
-        /// Web根路径，即wwwroot
-        /// </summary>
-        public static string WebRootPath => Environment?.WebRootPath;
-
-        #endregion 
 
         #region GetFiles(获取客户端文件集合)
 
@@ -283,6 +264,80 @@ namespace Bucket.Utility.Helpers
         public static string UrlDecode(string url, Encoding encoding)
         {
             return HttpUtility.UrlDecode(url, encoding);
+        }
+
+        #endregion
+
+        #region DownloadAsync(下载)
+
+        /// <summary>
+        /// 下载文件
+        /// </summary>
+        /// <param name="filePath">文件绝对路径</param>
+        /// <param name="fileName">文件名,包含扩展名</param>
+        public static async Task DownloadFileAsync(string filePath, string fileName)
+        {
+            await DownloadFileAsync(filePath, fileName, Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// 下载文件
+        /// </summary>
+        /// <param name="filePath">文件绝对路径</param>
+        /// <param name="fileName">文件名,包含扩展名</param>
+        /// <param name="encoding">字符编码</param>
+        public static async Task DownloadFileAsync(string filePath, string fileName, Encoding encoding)
+        {
+            var bytes = File.Read(filePath);
+            await DownloadAsync(bytes, fileName, encoding);
+        }
+
+        /// <summary>
+        /// 下载
+        /// </summary>
+        /// <param name="stream">流</param>
+        /// <param name="fileName">文件名,包含扩展名</param>
+        public static async Task DownloadAsync(Stream stream, string fileName)
+        {
+            await DownloadAsync(stream, fileName, Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// 下载
+        /// </summary>
+        /// <param name="stream">流</param>
+        /// <param name="fileName">文件名,包含扩展名</param>
+        /// <param name="encoding">字符编码</param>
+        public static async Task DownloadAsync(Stream stream, string fileName, Encoding encoding)
+        {
+            await DownloadAsync(File.ToBytes(stream), fileName, encoding);
+        }
+
+        /// <summary>
+        /// 下载
+        /// </summary>
+        /// <param name="bytes">字节流</param>
+        /// <param name="fileName">文件名,包含扩展名</param>
+        public static async Task DownloadAsync(byte[] bytes, string fileName)
+        {
+            await DownloadAsync(bytes, fileName, Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// 下载
+        /// </summary>
+        /// <param name="bytes">字节流</param>
+        /// <param name="fileName">文件名,包含扩展名</param>
+        /// <param name="encoding">字符编码</param>
+        public static async Task DownloadAsync(byte[] bytes, string fileName, Encoding encoding)
+        {
+            if (bytes == null || bytes.Length == 0)
+                return;
+            fileName = fileName.Replace(" ", "");
+            fileName = UrlEncode(fileName, encoding);
+            Response.ContentType = "application/octet-stream";
+            Response.Headers.Add("Content-Disposition", $"attachment; filename={fileName}");
+            await Response.Body.WriteAsync(bytes, 0, bytes.Length);
         }
 
         #endregion

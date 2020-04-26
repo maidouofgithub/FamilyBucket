@@ -1,31 +1,30 @@
 ﻿
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Text;
-using Microsoft.IdentityModel.Tokens;
-using Newtonsoft.Json.Serialization;
-using Autofac;
-using Autofac.Extensions.DependencyInjection;
-
+using Bucket.ApiGateway.ConfigStored.MySql;
+using Bucket.ApiGateway.Extensions.AppMetrics;
+using Bucket.ApiGateway.Extensions.DotNetty;
 using Bucket.DbContext;
 using Bucket.EventBus.Extensions;
 using Bucket.EventBus.RabbitMQ.Extensions;
-using Bucket.Logging;
 using Bucket.Logging.Events;
-using Bucket.Tracing.Extensions;
-using Bucket.Tracing.Events;
-using Bucket.ApiGateway.ConfigStored.MySql;
-
+using Bucket.Rpc;
+using Bucket.Rpc.Codec.MessagePack;
+using Bucket.Rpc.ProxyGenerator;
+using Bucket.Rpc.Transport.DotNetty;
+using Bucket.SkyApm.Agent.AspNetCore;
+using Bucket.SkyApm.Transport.EventBus;
 using global::Ocelot.DependencyInjection;
 using global::Ocelot.Middleware;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json.Serialization;
 using Ocelot.Cache.CacheManager;
 using Ocelot.Provider.Consul;
 using Ocelot.Provider.Polly;
-using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Http;
+using System;
+using System.Text;
 
 namespace Bucket.ApiGateway
 {
@@ -47,13 +46,9 @@ namespace Bucket.ApiGateway
         /// </summary>
         public IConfiguration Configuration { get; }
         /// <summary>
-        /// AutofacDI容器
-        /// </summary>
-        public IContainer AutofacContainer { get; private set; }
-        /// <summary>
         /// 配置服务
         /// </summary>
-        public IServiceProvider ConfigureServices(IServiceCollection services)
+        public void ConfigureServices(IServiceCollection services)
         {
             // 授权认证
             AddOcelotJwtBearer(services, Configuration);
@@ -67,44 +62,48 @@ namespace Bucket.ApiGateway
                     .AllowCredentials()
                 );
             });
-            // 添加首字母大写
-            services.AddMvc().AddJsonOptions(options => { options.SerializerSettings.ContractResolver = new DefaultContractResolver(); });
             // 添加事件驱动
             services.AddEventBus(option => { option.UseRabbitMQ(); });
-            // 添加队列日志
-            services.AddEventLog();
+            // 添加日志消息传输
+            services.AddLogEventTransport();
             // 添加链路
-            //services.AddTracer(Configuration);
-            //services.AddEventTrace();
+            services.AddBucketSkyApmCore().UseEventBusTransport();
             // 添加Orm
-            services.AddSqlSugarDbContext(ServiceLifetime.Transient);
+            services.AddSqlSugarDbContext().AddSqlSugarDbRepository();
+            // 添加Rpc应用
+            services.AddRpcCore().UseDotNettyTransport().UseMessagePackCodec().AddClientRuntime().AddServiceProxy();
             // 添加网关
-            services.AddOcelot()
-             .AddCacheManager(x =>
-             {
-                 x.WithDictionaryHandle();
-             })
-             .AddPolly()
-             .AddConsul()
-             //.AddConfigStoredInConsul()
-             //.AddConfigStoredInRedis("Bucket.ApiGateway", "127.0.0.1:6379,allowadmin=true");
-            .AddConfigStoredInMySql("Bucket.ApiGateway"); // 使用数据库
-            // 添加监控
-
-            // 添加autofac容器替换，默认容器注册方式缺少功能
-            var autofac_builder = new ContainerBuilder();
-            autofac_builder.Populate(services);
-            autofac_builder.RegisterModule<AutofacModuleRegister>();
-            AutofacContainer = autofac_builder.Build();
-            return new AutofacServiceProvider(AutofacContainer);
+            services.AddOcelot() // 添加网关组件
+                .AddDotNettyTransport()
+                .AddCacheManager(x => { x.WithDictionaryHandle(); }) // 添加本地缓存
+                .AddPolly() // 添加弹性计算组件
+                .AddConsul() // 添加Consul服务
+                             //.AddConfigStoredInConsul()
+                             //.AddConfigStoredInRedis("Bucket.ApiGateway", "10.10.188.136:6379,allowadmin=true");
+                .AddConfigStoredInMySql(Configuration.GetValue<string>("Project:Name")); // 添加MySql配置存储
+                                                                                         //.AddDotNettyTransport(); // 添加DotNetty传输
+                                                                                         // 添加监控
+            services.AddAppMetrics(x =>
+            {
+                var opt = Configuration.GetSection("AppMetrics").Get<AppMetricsOptions>();
+                x.Enable = opt.Enable;
+                x.App = opt.App;
+                x.ConnectionString = opt.ConnectionString;
+                x.DataBaseName = opt.DataBaseName;
+                x.Env = opt.Env;
+                x.Password = opt.Password;
+                x.UserName = opt.UserName;
+            });
+            // 添加首字母大写
+            services.AddMvc().AddJsonOptions(options => { options.SerializerSettings.ContractResolver = new DefaultContractResolver(); })
+                .SetCompatibilityVersion(Microsoft.AspNetCore.Mvc.CompatibilityVersion.Version_2_2);
         }
         /// <summary>
         /// 授权认证
         /// </summary>
         /// <param name="services"></param>
         /// <param name="configuration"></param>
-        /// <param name="isHttps"></param>
-        private void AddOcelotJwtBearer(IServiceCollection services, IConfiguration configuration, bool isHttps = false)
+        private void AddOcelotJwtBearer(IServiceCollection services, IConfiguration configuration)
         {
             var config = configuration.GetSection("JwtAuthorize");
             var keyByteArray = Encoding.ASCII.GetBytes(config["Secret"]);
@@ -130,38 +129,23 @@ namespace Bucket.ApiGateway
                 //不使用https
                 opt.RequireHttpsMetadata = bool.Parse(config["IsHttps"]);
                 opt.TokenValidationParameters = tokenValidationParameters;
+
             });
-        }
-        /// <summary>
-        /// Autofac扩展注册
-        /// </summary>
-        private class AutofacModuleRegister : Autofac.Module
-        {
-            /// <summary>
-            /// 装载autofac方式注册
-            /// </summary>
-            /// <param name="builder"></param>
-            protected override void Load(ContainerBuilder builder)
-            {
-                // 数据仓储泛型注册
-                builder.RegisterGeneric(typeof(SqlSugarRepository<>)).As(typeof(IDbRepository<>))
-                    .InstancePerLifetimeScope();
-            }
         }
         /// <summary>
         /// 配置请求管道
         /// </summary>
         /// <param name="app"></param>
-        /// <param name="env"></param>
-        /// <param name="loggerFactory"></param>
-        /// <param name="appLifetime"></param>
-        public void Configure(IApplicationBuilder app, ILoggerFactory loggerFactory, IApplicationLifetime appLifetime)
+        public void Configure(IApplicationBuilder app)
         {
             // 使用跨域
             app.UseCors("CorsPolicy");
-            // 健康检查地址
-            var conf = new OcelotPipelineConfiguration()
+            // 使用监控
+            app.UseAppMetrics();
+            // 网关扩展中间件配置
+            var configuration = new OcelotPipelineConfiguration()
             {
+                // 扩展为健康检查地址
                 PreErrorResponderMiddleware = async (ctx, next) =>
                 {
                     if (ctx.HttpContext.Request.Path.Equals(new PathString("/")))
@@ -172,16 +156,12 @@ namespace Bucket.ApiGateway
                     {
                         await next.Invoke();
                     }
-                }
+                },
             };
-            // 使用监控
-
+            // 增加DotNetty请求通道,因为最终会阻断通道,所以要包含部分中间件功能
+            configuration.MapWhenOcelotPipeline.Add(new DotNettyOcelotPipeline().DotNettyPipeline);
             // 使用网关
-            app.UseOcelot(conf).Wait();
-            // 日志,事件驱动日志
-            loggerFactory.AddBucketLog(app, Configuration.GetValue<string>("Project:Name"));
-            // Autofac容器释放
-            appLifetime.ApplicationStopped.Register(() => { AutofacContainer.Dispose(); });
+            app.UseOcelot(configuration).Wait();
             // Welcome
             Console.WriteLine(Welcome());
         }
@@ -196,7 +176,7 @@ namespace Bucket.ApiGateway
             builder.AppendLine();
             builder.AppendLine("***************************************************************");
             builder.AppendLine("*                                                             *");
-            builder.AppendLine("*                Welcome To Pinzhi.ApiGateway                 *");
+            builder.AppendLine("*                Welcome To Bucket.ApiGateway                 *");
             builder.AppendLine("*                                                             *");
             builder.AppendLine("***************************************************************");
             return builder.ToString();

@@ -1,12 +1,12 @@
-﻿namespace Bucket.ApiGateway
+﻿using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using System.Text;
+
+namespace Bucket.ApiGateway
 {
-    using System.IO;
-    using Microsoft.AspNetCore.Hosting;
-    using Microsoft.Extensions.Configuration;
-    using Microsoft.AspNetCore.Builder;
-    using Microsoft.AspNetCore;
-
-
     /// <summary>
     /// 应用程序
     /// </summary>
@@ -18,23 +18,15 @@
         /// <param name="args">入口点参数</param>
         public static void Main(string[] args)
         {
-            // 域名与端口配置
-            var hostingconfig = new ConfigurationBuilder()
-                .AddJsonFile("hosting.json", optional: false)
-                .Build();
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             WebHost.CreateDefaultBuilder(args)
-                   .UseKestrel()
-                   .UseContentRoot(Directory.GetCurrentDirectory())
-                   .ConfigureAppConfiguration((hostingContext, _config) =>
+                   .ConfigureLogging((hostingContext, logging) =>
                    {
-                       _config
-                       .SetBasePath(Directory.GetCurrentDirectory())
-                       .AddJsonFile("appsettings.json", true, true)
-                       .AddJsonFile($"appsettings.{hostingContext.HostingEnvironment.EnvironmentName}.json", true, true)
-                       .AddEnvironmentVariables(); // 添加环境变量
+                       //logging.AddConfiguration(hostingContext.Configuration.GetSection("Logging")).ClearProviders()
+                       //       .AddBucketLog(hostingContext.Configuration.GetValue<string>("Project:Name"));
+                       logging.AddConfiguration(hostingContext.Configuration.GetSection("Logging")).AddConsole().AddDebug();
                    })
                    .UseStartup<Startup>()
-                   .UseUrls(hostingconfig.GetValue<string>("urls"))
                    .Build()
                    .Run();
         }

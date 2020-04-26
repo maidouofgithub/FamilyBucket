@@ -1,14 +1,14 @@
-﻿using System;
-using Hangfire;
+﻿using Hangfire;
 using Hangfire.Console;
 using Hangfire.RecurringJobExtensions;
 using Hangfire.Server;
 using Microsoft.Extensions.DependencyInjection;
+using System;
 
 namespace Bucket.HangFire.Server
 {
     [AutomaticRetry(Attempts = 0)]
-    public class LongRuningJob: IRecurringJob
+    public class LongRuningJob : IRecurringJob
     {
         private static bool IsRunning;
         private static object _obj = new object();
@@ -26,7 +26,7 @@ namespace Bucket.HangFire.Server
                         try
                         {
                             context.GetJobData();
-                            using (var scope = Static.serviceProvider.CreateScope())
+                            using (var scope = HangfireServiceProvider.ServiceProvider.CreateScope())
                             {
                                 // doing ....
                             }

@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Bucket.EventBus.Util;
+using Newtonsoft.Json;
+using System;
 
 namespace Bucket.EventBus.Events
 {
@@ -6,11 +8,18 @@ namespace Bucket.EventBus.Events
     {
         public IntegrationEvent()
         {
-            Id = Guid.NewGuid();
+            Id = SnowflakeId.Default().NextId();
             CreationDate = DateTime.Now;
         }
-
-        public Guid Id { get; }
-        public DateTime CreationDate { get; }
+        [JsonConstructor]
+        public IntegrationEvent(long id, DateTime createDate)
+        {
+            Id = id;
+            CreationDate = createDate;
+        }
+        [JsonProperty]
+        public long Id { get; private set; }
+        [JsonProperty]
+        public DateTime CreationDate { get; private set; }
     }
 }

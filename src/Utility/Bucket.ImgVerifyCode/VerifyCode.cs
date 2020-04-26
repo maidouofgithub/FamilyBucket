@@ -1,7 +1,6 @@
-﻿using System;
+﻿using SkiaSharp;
+using System;
 using System.Collections.Generic;
-using SkiaSharp;
-using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 
@@ -162,7 +161,7 @@ namespace Bucket.ImgVerifyCode
             return value;
         }
 
-        private static List<SKColor> colors = new List<SKColor>()
+        private static readonly List<SKColor> colors = new List<SKColor>()
         {
             new SKColor(205,104,0),
             new SKColor(151,155,22),
@@ -209,7 +208,7 @@ namespace Bucket.ImgVerifyCode
                     {
                         _x += size.Width + Next(0, 3);
                         _y = size.Height + Next(5, 15);
-                        canvas.DrawText(text[i].ToString(), _x , _y, sKPaint); // 画文字
+                        canvas.DrawText(text[i].ToString(), _x, _y, sKPaint); // 画文字
                     }
                 }
                 // 页面展示图片

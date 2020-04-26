@@ -1,5 +1,4 @@
-﻿using Bucket.EventBus.Abstractions;
-using Bucket.EventBus.Events;
+﻿using Bucket.EventBus.Events;
 using System;
 using System.Collections.Generic;
 
@@ -9,21 +8,25 @@ namespace Bucket.EventBus.Abstractions
     {
         bool IsEmpty { get; }
         event EventHandler<string> OnEventRemoved;
+        void AddDynamicSubscription<TH>(string eventName)
+           where TH : IDynamicIntegrationEventHandler;
 
         void AddSubscription<T, TH>()
            where T : IntegrationEvent
            where TH : IIntegrationEventHandler<T>;
 
         void RemoveSubscription<T, TH>()
-           where T : IntegrationEvent
-           where TH : IIntegrationEventHandler<T>;
+             where TH : IIntegrationEventHandler<T>
+             where T : IntegrationEvent;
+        void RemoveDynamicSubscription<TH>(string eventName)
+            where TH : IDynamicIntegrationEventHandler;
 
         bool HasSubscriptionsForEvent<T>() where T : IntegrationEvent;
         bool HasSubscriptionsForEvent(string eventName);
-        void Clear();
-        IEnumerable<Type> GetHandlersForEvent<T>() where T : IntegrationEvent;
-        IEnumerable<Type> GetHandlersForEvent(string eventName);
-        string GetEventKey<T>();
         Type GetEventTypeByName(string eventName);
+        void Clear();
+        IEnumerable<SubscriptionInfo> GetHandlersForEvent<T>() where T : IntegrationEvent;
+        IEnumerable<SubscriptionInfo> GetHandlersForEvent(string eventName);
+        string GetEventKey<T>();
     }
 }

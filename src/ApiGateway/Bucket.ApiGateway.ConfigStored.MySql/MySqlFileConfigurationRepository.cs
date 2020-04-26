@@ -1,13 +1,13 @@
-﻿using Ocelot.Configuration.File;
+﻿using Bucket.ApiGateway.ConfigStored.MySql.Entity;
+using Bucket.DbContext.SqlSugar;
+using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json;
+using Ocelot.Configuration.File;
 using Ocelot.Configuration.Repository;
 using Ocelot.Responses;
-using System.Threading.Tasks;
-using Bucket.DbContext;
-using Bucket.ApiGateway.ConfigStored.MySql.Entity;
-using Newtonsoft.Json;
-using System.Collections.Generic;
 using System;
-using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Bucket.ApiGateway.ConfigStored.MySql
 {
@@ -26,8 +26,8 @@ namespace Bucket.ApiGateway.ConfigStored.MySql
         {
             using (var scope = _serviceProvider.CreateScope())
             {
-                var _configDbRepository = scope.ServiceProvider.GetRequiredService<IDbRepository<ConfigurationInfo>>();
-                var _routeDbRepository = scope.ServiceProvider.GetRequiredService<IDbRepository<ReRouteInfo>>();
+                var _configDbRepository = scope.ServiceProvider.GetRequiredService<ISqlSugarDbRepository<ConfigurationInfo>>();
+                var _routeDbRepository = scope.ServiceProvider.GetRequiredService<ISqlSugarDbRepository<ReRouteInfo>>();
 
                 var st = DateTime.Now;
                 var fileConfig = new FileConfiguration();

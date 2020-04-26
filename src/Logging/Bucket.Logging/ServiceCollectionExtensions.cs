@@ -1,8 +1,6 @@
 ﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using System;
 
@@ -58,6 +56,7 @@ namespace Bucket.Logging
         /// <returns></returns>
         public static ILoggingBuilder AddBucketLog(this ILoggingBuilder builder, string projectName)
         {
+            builder.ClearProviders(); // 清除已实现
             builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
             builder.Services.AddSingleton<ILoggerProvider>(sp =>
             {

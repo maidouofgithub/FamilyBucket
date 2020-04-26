@@ -1,10 +1,9 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using Bucket.WebSocketManager;
+using Bucket.WebSocketServer.MessageHandlers;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Bucket.WebSocketManager;
-using System;
-using Bucket.WebSocketServer.MessageHandlers;
 using Microsoft.Extensions.Logging;
 
 namespace Bucket.WebSocketServer
@@ -25,7 +24,7 @@ namespace Bucket.WebSocketServer
             services.AddOptions();
             services.AddLogging();
         }
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, IServiceProvider serviceProvider, ILoggerFactory loggerFactory)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
             loggerFactory.AddConsole().AddDebug();
             app.UseStaticFiles();
@@ -37,7 +36,7 @@ namespace Bucket.WebSocketServer
                     template: "api/{controller}/{action}/{id?}"
                 );
             });
-            app.MapWebSocketManager("/ws", serviceProvider.GetService<BusMessageHandler>());
+            app.MapWebSocketManager("/ws", app.ApplicationServices.GetService<BusMessageHandler>());
         }
     }
 }

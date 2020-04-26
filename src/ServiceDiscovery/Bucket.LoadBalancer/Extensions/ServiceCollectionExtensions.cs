@@ -1,7 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Bucket.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Bucket.LoadBalancer.Extensions
 {
@@ -16,8 +14,18 @@ namespace Bucket.LoadBalancer.Extensions
         public static IServiceCollection AddLoadBalancer(this IServiceCollection services)
         {
             services.AddSingleton<ILoadBalancerFactory, LoadBalancerFactory>();
-            services.AddSingleton<ILoadBalancerHouse, LoadBalancerHouse>();
+            services.AddSingleton<ILoadBalancerManager, LoadBalancerManager>();
             return services;
+        }
+        /// <summary>
+        /// 添加负载均衡器
+        /// </summary>
+        /// <param name="services"></param>
+        /// <param name="configAction"></param>
+        /// <returns></returns>
+        public static IServiceCollection AddLoadBalancer(this IBucketBuilder builder)
+        {
+            return AddLoadBalancer(builder.Services);
         }
     }
 }
